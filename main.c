@@ -3,117 +3,94 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "bars.h"
 #include "field.h"
 #include "getch.h"
 #include "player.h"
+#include "render.h"
 
-int check_collision(Player player, Pos *bars);
-void update_bars(Field *field, Pos *bars);
-void render(Field field, Player player);
+void mainloop(Field *field, Player *player, Bars *bars, int fps);
+void handle_controls(Field *field, Player *player, char key);
+void handle_ceiling_collision(Player *player, Field *field);
+void game_step(Field *field, Player *player, Bars *bars);
+void print_results(Player player);
 
 int main() {
-    Pos *bars = (Pos *)malloc(sizeof(Pos) * 20);
-    srand(time(NULL));
-    for (int i = 0; i < 20; i++) {
-        bars[i].x = (rand() / 2) % 26 + 1;
-        bars[i].y = 3 * i + 2;
-    }
-    printf("\n");
-    int fps = 90;
-    struct timespec ts;
-    ts.tv_sec = 0;
-    ts.tv_nsec = 1000000000 / fps;
+    Bars *bars = create_bars(20);
     Field *field = create_field(35, 24);
     Player *player = create_player(field);
-    char key;
-    int interval = 18;
-    int iter = 0;
-    int jump_height = 4;
-    int jump_iter = 0;
-    while ((key = getch()) != 'q' && player->health > 0) {
-        if (system("clear") == -1) return -1;
-        clear_field(field);
-        update_bars(field, bars);
-        render(*field, *player);
-        if (key == 'a') {
-            move_player(field, player, -1, 0);
-        }
-        if (key == 'd') {
-            move_player(field, player, 1, 0);
-        }
-        if (iter == interval) {
-            if (player->pos[0][1].y < field->height - 1 || player->direction == -1) {
-                move_player(field, player, 0, player->direction);
-            }
-            jump_iter++;
-            if (jump_iter == jump_height) {
-                player->direction = -1;
-                jump_iter = 0;
-            }
-            if (check_collision(*player, bars) == 1) {
-                player->score++;
-                player->direction = 1;
-                jump_iter = 0;
-            }
-            if (player->direction == 1) {
-                for (int i = 0; i < 20; i++) {
-                    bars[i].y--;
-                    if (bars[i].y < 0) {
-                        bars[i].y += 60;
-                        bars[i].x = (rand() / 2) % 26 + 1;
-                    }
-                }
-            }
-            iter = 0;
-        }
-        if (player->direction == -1 && player->pos[0][0].y < 0) {
-            player->health--;
-            reset_player(field, player);
-            player->direction = 1;
-            jump_iter = 0;
-        }
-        iter++;
-        nanosleep(&ts, NULL);
-    }
-    if (system("clear") == -1) return -1;
-    clear_field(field);
-    render(*field, *player);
+
+    mainloop(field, player, bars, 90);
+    print_results(*player);
     destroy_field(field);
-    free(bars);
+    destroy_bars(bars);
     free(player);
     return 0;
 }
 
-int check_collision(Player player, Pos *bars) {
-    for (int i = 0; i < 20; i++) {
-        for (int j = 0; j < 2; j++) {
-            if (player.pos[j][0].x >= bars[i].x && player.pos[j][0].x <= bars[i].x + 2 &&
-                player.pos[j][0].y == bars[i].y && player.direction == -1) {
-                return 1;
-            }
+void mainloop(Field *field, Player *player, Bars *bars, int fps) {
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = 1000000000 / fps;
+    int error_flag = 0;
+    int vertical_frequency = 18;
+    int tick = 0;
+    char key;
+    while ((key = getch()) != 'q' && player->health > 0 && error_flag == 0) {
+        clear_field(field);
+        update_bars(field, bars);
+        render(*field, *player);
+        handle_controls(field, player, key);
+        if (tick == vertical_frequency) {
+            game_step(field, player, bars);
+            tick = 0;
         }
+        handle_ceiling_collision(player, field);
+        nanosleep(&ts, NULL);
+        error_flag = system("clear");
+        tick++;
     }
-    return 0;
 }
 
-void update_bars(Field *field, Pos *bars) {
-    for (int i = 0; i < 20; i++) {
-        if (bars[i].y >= 0 && bars[i].y < field->height) {
-            field->cells[bars[i].x][bars[i].y] = '-';
-            field->cells[bars[i].x + 1][bars[i].y] = '-';
-            field->cells[bars[i].x + 2][bars[i].y] = '-';
-        }
+void handle_controls(Field *field, Player *player, char key) {
+    if (key == 'a') {
+        move_player(field, player, -1, 0);
+    }
+    if (key == 'd') {
+        move_player(field, player, 1, 0);
     }
 }
 
-void render(Field field, Player player) {
-    printf("\n");
-    update_player(field, player);
-    for (int i = field.height - 1; i >= 0; i--) {
-        for (int j = 0; j < field.width; j++) {
-            printf("%c", field.cells[j][i]);
-        }
-        printf("\n");
+void handle_ceiling_collision(Player *player, Field *field) {
+    if (player->direction == -1 && player->pos[0][0].y < 0) {
+        reset_player(field, player);
+        player->health--;
+        player->direction = 1;
+        player->current_jump_height = 0;
     }
-    printf("     Health: %d/%d  |  Score: %d\n", player.health, player.max_health, player.score);
+}
+
+void game_step(Field *field, Player *player, Bars *bars) {
+    if (player->pos[0][1].y < field->height - 1 || player->direction == -1) {
+        move_player(field, player, 0, player->direction);
+    }
+    player->current_jump_height++;
+    if (player->current_jump_height == player->max_jump_height) {
+        player->direction = -1;
+        player->current_jump_height = 0;
+    }
+    if (check_bars_collision(*player, bars) == 1) {
+        player->score++;
+        player->direction = 1;
+        player->current_jump_height = 0;
+    }
+    if (player->direction == 1) {
+        move_bars(field, bars);
+    }
+}
+
+void print_results(Player player) {
+    printf("-------------------------------\n");
+    printf("      Your score is %04d!\n", player.score);
+    printf("-------------------------------\n");
 }

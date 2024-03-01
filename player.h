@@ -14,12 +14,14 @@ typedef struct Player {
     int health;
     int max_health;
     int score;
+    int max_jump_height;
+    int current_jump_height;
     char image[2][2];
 } Player;
 
 Player *create_player(Field *field);
 void reset_player(Field *field, Player *player);
 void move_player(Field *field, Player *player, int x, int y);
-void update_player(Field Field, Player player);
+void update_player(Field *field, Player *player);
 
 #endif

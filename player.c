@@ -15,6 +15,8 @@ Player *create_player(Field *field) {
     player->health = 3;
     player->max_health = 3;
     player->score = 0;
+    player->max_jump_height = 4;
+    player->current_jump_height = 0;
     return player;
 }
 
@@ -36,10 +38,10 @@ void move_player(Field *field, Player *player, int x, int y) {
     }
 }
 
-void update_player(Field field, Player player) {
+void update_player(Field *field, Player *player) {
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
-            field.cells[player.pos[i][j].x][player.pos[i][j].y] = player.image[i][j];
+            field->cells[player->pos[i][j].x][player->pos[i][j].y] = player->image[i][j];
         }
     }
 }
