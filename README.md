@@ -21,7 +21,7 @@ This will compile the C source files and link the executable.
 
 After a successful build, you can run the game: `make run`
 
-Use the arrow keys to control the character and jump from platform to platform.
+Use A and D keys to control the character and jump from platform to platform.
 
 <!-- ## Running the tests
 
